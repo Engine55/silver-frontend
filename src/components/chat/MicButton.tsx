@@ -4,10 +4,46 @@
 import { Mic, MicOff } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
-// 类型声明：增强 window 对象
+/* 类型声明（局部声明 Web Speech API 类型） */
+type SpeechRecognitionResult = {
+  readonly isFinal: boolean;
+  readonly length: number;
+  item: (index: number) => SpeechRecognitionAlternative;
+  [index: number]: SpeechRecognitionAlternative;
+};
+
+type SpeechRecognitionAlternative = {
+  readonly transcript: string;
+  readonly confidence: number;
+};
+
+type SpeechRecognitionResultList = {
+  readonly length: number;
+  item: (index: number) => SpeechRecognitionResult;
+  [index: number]: SpeechRecognitionResult;
+};
+
+type SpeechRecognitionEvent = {
+  readonly resultIndex: number;
+  readonly results: SpeechRecognitionResultList;
+};
+
+type WebkitSpeechRecognition = {
+  start: () => void;
+  stop: () => void;
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+};
+
 declare global {
   interface Window {
-    webkitSpeechRecognition: any;
+    webkitSpeechRecognition: {
+      new (): WebkitSpeechRecognition;
+    };
   }
 }
 
@@ -17,7 +53,7 @@ interface MicButtonProps {
 
 export default function MicButton({ onResult }: MicButtonProps) {
   const [isListening, setIsListening] = useState(false);
-  const recognitionRef = useRef<any>(null); // 用 any 避免找不到类型报错
+  const recognitionRef = useRef<WebkitSpeechRecognition | null>(null); // 类型明确
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.webkitSpeechRecognition) return;
@@ -27,7 +63,7 @@ export default function MicButton({ onResult }: MicButtonProps) {
     recognition.lang = 'zh-CN';
     recognition.interimResults = false;
 
-    recognition.onresult = (event: any) => {
+    recognition.onresult = (event) => {
       const result = event.results[0][0].transcript;
       onResult(result);
       setIsListening(false);
