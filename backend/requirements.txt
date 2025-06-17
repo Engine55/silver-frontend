@@ -1,0 +1,13 @@
+# WebRTC WebSocket 信令服务器依赖
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+websockets==12.0
+python-multipart==0.0.6
+
+# 可选：如果需要数据库支持
+# sqlalchemy==2.0.23
+# alembic==1.13.1
+
+# 可选：如果需要Redis支持
+# redis==5.0.1
+# aioredis==2.0.1
