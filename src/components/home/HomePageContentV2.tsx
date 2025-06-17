@@ -1,31 +1,14 @@
 // src/components/home/HomePageContentV2.tsx
 'use client';
-
 import RoomCard from '@/components/rooms/RoomCard';
 import AIChatBox from '@/components/chat/AIChatBox';
-
-const rooms = [
-  {
-    id: 'neutral',
-    title: 'Tea Room',
-    description: 'Have a cup of tea and chat quietly',
-    color: 'bg-gray-100',
-  },
-  {
-    id: 'positive',
-    title: 'Positive KTV',
-    description: 'Share good news 🎤',
-    color: 'bg-yellow-100',
-  },
-  {
-    id: 'negative',
-    title: 'Meditation Room',
-    description: 'Pour your heart out & heal 🌙',
-    color: 'bg-blue-100',
-  },
-];
+import { getAllRooms } from '@/config/rooms';
+import React from "react";
 
 export default function HomePageContentV2() {
+  // 从统一配置获取房间数据
+  const rooms = getAllRooms();
+
   return (
     <section className="flex-1 p-6 grid grid-cols-2 gap-6 bg-[#f9fafb]">
       {/* Left side: Theme rooms */}
@@ -45,6 +28,7 @@ export default function HomePageContentV2() {
           <AIChatBox
             geminiApiKey={process.env.NEXT_PUBLIC_GEMINI_API_KEY || ''}
           />
+          {/* 移除了 FloatingVideoButton，因为每个房间都有独立的视频通话功能 */}
         </div>
       </div>
     </section>
