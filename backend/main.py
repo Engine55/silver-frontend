@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import logging
-from typing import Dict, List
+from typing import Dict
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -149,7 +149,7 @@ async def join_room(request: JoinRoomRequest):
         result = room_manager.join_room(
             request.roomId,
             request.userId,
-            request.offer.dict()
+            request.offer.model_dump()
         )
 
         logger.info(f"加入房间结果: {result}")
