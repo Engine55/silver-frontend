@@ -44,7 +44,7 @@ export default function NewHomePage() {
         {/* 右边：AI 聊天框 */}
         <div className="bg-white rounded-xl shadow-md p-4 flex flex-col justify-between h-[500px]">
           <h2 className="text-xl font-bold text-gray-800 mb-2">AI 助手</h2>
-          <AIChatBox geminiApiKey={""} />
+          <AIChatBox geminiApiKey={"geminiApiKey"} />
         </div>
       </section>
     </main>
