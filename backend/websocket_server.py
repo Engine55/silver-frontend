@@ -1,4 +1,5 @@
 # websocket_server.py - WebSocket 版本的 WebRTC 信令服务器
+# websocket_server.py - WebSocket 版本的 WebRTC 信令服务器
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -56,8 +57,7 @@ class ConnectionManager:
         """发送消息给特定用户"""
         if user_id in self.active_connections:
             try:
-                await
-                self.active_connections[user_id].send_text(json.dumps(message))
+                await self.active_connections[user_id].send_text(json.dumps(message))
                 return True
             except Exception as e:
                 logger.error(f"发送消息给 {user_id} 失败: {e}")
@@ -72,8 +72,7 @@ class ConnectionManager:
         for user_id in self.rooms[room_id]["users"]:
             if exclude_user and user_id == exclude_user:
                 continue
-            await
-            self.send_personal_message(message, user_id)
+            await self.send_personal_message(message, user_id)
 
     def join_room(self, user_id: str, room_id: str) -> dict:
         """用户加入房间"""
@@ -162,34 +161,27 @@ manager = ConnectionManager()
 # WebSocket 端点
 @app.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):
-    await
-    manager.connect(websocket, user_id)
+    await manager.connect(websocket, user_id)
 
     try:
         while True:
             # 接收消息
-            data = await
-            websocket.receive_text()
+            data = await websocket.receive_text()
             message = json.loads(data)
 
             message_type = message.get("type")
             logger.info(f"收到来自 {user_id} 的消息: {message_type}")
 
             if message_type == "join-room":
-                await
-                handle_join_room(user_id, message)
+                await handle_join_room(user_id, message)
             elif message_type == "offer":
-                await
-                handle_offer(user_id, message)
+                await handle_offer(user_id, message)
             elif message_type == "answer":
-                await
-                handle_answer(user_id, message)
+                await handle_answer(user_id, message)
             elif message_type == "ice-candidate":
-                await
-                handle_ice_candidate(user_id, message)
+                await handle_ice_candidate(user_id, message)
             elif message_type == "leave-room":
-                await
-                handle_leave_room(user_id, message)
+                await handle_leave_room(user_id, message)
             else:
                 logger.warning(f"未知消息类型: {message_type}")
 
@@ -198,8 +190,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
         # 通知房间内其他用户
         if user_id in manager.user_rooms:
             room_id = manager.user_rooms[user_id]
-            await
-            manager.broadcast_to_room({
+            await manager.broadcast_to_room({
                 "type": "user-left",
                 "user_id": user_id,
                 "message": f"用户 {user_id} 已离开房间"
@@ -211,8 +202,7 @@ async def handle_join_room(user_id: str, message: dict):
     """处理加入房间"""
     room_id = message.get("room_id")
     if not room_id:
-        await
-        manager.send_personal_message({
+        await manager.send_personal_message({
             "type": "error",
             "message": "房间号不能为空"
         }, user_id)
@@ -221,16 +211,14 @@ async def handle_join_room(user_id: str, message: dict):
     result = manager.join_room(user_id, room_id)
 
     # 发送加入结果给当前用户
-    await
-    manager.send_personal_message({
+    await manager.send_personal_message({
         "type": "room-joined",
         **result
     }, user_id)
 
     # 如果加入成功，通知房间内其他用户
     if result["success"] and result["other_users"]:
-        await
-        manager.broadcast_to_room({
+        await manager.broadcast_to_room({
             "type": "user-joined",
             "user_id": user_id,
             "message": f"用户 {user_id} 加入了房间"
@@ -241,8 +229,7 @@ async def handle_offer(user_id: str, message: dict):
     """处理 SDP Offer"""
     room_id = manager.user_rooms.get(user_id)
     if not room_id:
-        await
-        manager.send_personal_message({
+        await manager.send_personal_message({
             "type": "error",
             "message": "您还未加入房间"
         }, user_id)
@@ -251,8 +238,7 @@ async def handle_offer(user_id: str, message: dict):
     # 转发 offer 给房间内其他用户
     target_user = manager.get_room_other_user(room_id, user_id)
     if target_user:
-        await
-        manager.send_personal_message({
+        await manager.send_personal_message({
             "type": "offer",
             "from": user_id,
             "offer": message.get("offer")
@@ -264,8 +250,7 @@ async def handle_answer(user_id: str, message: dict):
     """处理 SDP Answer"""
     room_id = manager.user_rooms.get(user_id)
     if not room_id:
-        await
-        manager.send_personal_message({
+        await manager.send_personal_message({
             "type": "error",
             "message": "您还未加入房间"
         }, user_id)
@@ -274,8 +259,7 @@ async def handle_answer(user_id: str, message: dict):
     # 转发 answer 给房间内其他用户
     target_user = manager.get_room_other_user(room_id, user_id)
     if target_user:
-        await
-        manager.send_personal_message({
+        await manager.send_personal_message({
             "type": "answer",
             "from": user_id,
             "answer": message.get("answer")
@@ -292,8 +276,7 @@ async def handle_ice_candidate(user_id: str, message: dict):
     # 转发 ICE candidate 给房间内其他用户
     target_user = manager.get_room_other_user(room_id, user_id)
     if target_user:
-        await
-        manager.send_personal_message({
+        await manager.send_personal_message({
             "type": "ice-candidate",
             "from": user_id,
             "candidate": message.get("candidate")
@@ -305,8 +288,7 @@ async def handle_leave_room(user_id: str, message: dict):
     room_id = manager.user_rooms.get(user_id)
     if room_id:
         # 通知其他用户
-        await
-        manager.broadcast_to_room({
+        await manager.broadcast_to_room({
             "type": "user-left",
             "user_id": user_id,
             "message": f"用户 {user_id} 离开了房间"
@@ -346,8 +328,7 @@ async def reset_all_rooms():
 
     # 通知所有连接的用户
     for user_id in list(manager.active_connections.keys()):
-        await
-        manager.send_personal_message({
+        await manager.send_personal_message({
             "type": "rooms-reset",
             "message": "所有房间已被重置"
         }, user_id)
@@ -366,8 +347,7 @@ async def reset_single_room(room_id: str):
         users = manager.rooms[room_id]["users"].copy()
 
         # 通知房间内用户
-        await
-        manager.broadcast_to_room({
+        await manager.broadcast_to_room({
             "type": "room-reset",
             "message": f"房间 {room_id} 已被重置"
         }, room_id)
