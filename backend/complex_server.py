@@ -1,4 +1,5 @@
 # main.py - FastAPI WebRTC 信令服务器
+# main.py - FastAPI WebRTC 信令服务器
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -23,18 +24,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 # 数据模型
 class SDPOffer(BaseModel):
     sdp: str
     type: str
 
-
 class JoinRoomRequest(BaseModel):
     roomId: str
     userId: str
     offer: SDPOffer
-
 
 class CallUserRequest(BaseModel):
     from_user: str = Field(alias="from")
@@ -42,7 +40,6 @@ class CallUserRequest(BaseModel):
     offer: SDPOffer
 
 
-# Lai: 修改 1：增加 call_id 与 accept 字段，使 answer-call 请求解析不会出错
 class AnswerRequest(BaseModel):
     call_id: Optional[str] = None  # 增加字段：用于唯一标识呼叫
     accept: Optional[bool] = True  # 增加字段：用于指示是否接受呼叫
@@ -50,7 +47,6 @@ class AnswerRequest(BaseModel):
     from_user: Optional[str] = Field(None, alias="from")
     to: Optional[str] = None
     answer: Optional[SDPOffer] = None  # 可为空，避免 reject 时出错
-
 
 # 全局状态管理
 class ConnectionManager:
@@ -62,14 +58,14 @@ class ConnectionManager:
 
     async def connect_user(self, user_id: str, websocket: WebSocket):
         """用户连接"""
-        await websocket.accept()
+        await
+        websocket.accept()
         self.active_connections[user_id] = websocket
         self.users[user_id] = {"status": "online", "room_id": None}
         logger.info(f"用户 {user_id} 已连接")
         await self.broadcast_user_status(user_id, "online")
 
     async def disconnect_user(self, user_id: str):
-        """用户断开连接"""
         if user_id in self.active_connections:
             del self.active_connections[user_id]
 
@@ -83,7 +79,6 @@ class ConnectionManager:
         await self.broadcast_user_status(user_id, "offline")
 
     async def send_to_user(self, user_id: str, message: dict):
-        """发送消息给指定用户"""
         if user_id in self.active_connections:
             try:
                 await self.active_connections[user_id].send_text(json.dumps(message))
@@ -101,17 +96,18 @@ class ConnectionManager:
             "user_id": user_id,
             "status": status
         }
-        for uid in self.active_connections:
+
+        for uid, ws in self.active_connections.items():
             if uid != user_id:
                 await self.send_to_user(uid, message)
 
     async def join_room(self, user_id: str, room_id: str, offer: dict):
-        """加入房间"""
         if room_id not in self.rooms:
             self.rooms[room_id] = {"users": [], "offers": {}, "answers": {}}
 
         room = self.rooms[room_id]
 
+        # 检查房间是否已满
         if len(room["users"]) >= 2:
             return {"success": False, "message": "房间已满"}
 
@@ -146,12 +142,12 @@ class ConnectionManager:
             return {"success": True, "matched": False, "waiting": True}
 
     async def leave_room(self, user_id: str, room_id: str):
-        """离开房间"""
         if room_id in self.rooms:
             room = self.rooms[room_id]
             if user_id in room["users"]:
                 room["users"].remove(user_id)
 
+                # 通知房间内其他用户
                 for other_user in room["users"]:
                     await self.send_to_user(other_user, {
                         "type": "peer_left",
@@ -159,6 +155,7 @@ class ConnectionManager:
                         "room_id": room_id
                     })
 
+                # 如果房间为空，删除房间
                 if len(room["users"]) == 0:
                     del self.rooms[room_id]
 
@@ -168,15 +165,12 @@ class ConnectionManager:
 
     async def call_user(self, from_user: str, to_user: str, offer: dict):
         """直接呼叫用户"""
+        # 检查目标用户是否在线
         if to_user not in self.users or self.users[to_user]["status"] != "online":
             return {"success": False, "message": "用户不在线或忙碌中"}
 
         call_id = str(uuid.uuid4())
-        self.pending_calls[call_id] = {
-            "from": from_user,
-            "to": to_user,
-            "offer": offer
-        }
+        self.pending_calls[call_id] = {"from": from_user, "to": to_user, "offer": offer}
 
         await self.send_to_user(to_user, {
             "type": "incoming_call",
@@ -191,7 +185,6 @@ class ConnectionManager:
         return {"success": True, "call_id": call_id}
 
     async def answer_call(self, call_id: str, accept: bool, answer: dict = None):
-        """应答呼叫"""
         if call_id not in self.pending_calls:
             return {"success": False, "message": "呼叫不存在"}
 
@@ -222,18 +215,19 @@ class ConnectionManager:
 
     def get_online_users(self, exclude_user: str = None):
         """获取在线用户列表"""
-        return [
-            {"id": uid, "status": info["status"]}
-            for uid, info in self.users.items()
-            if uid != exclude_user and info["status"] == "online"
-        ]
+        online_users = []
+        for user_id, user_info in self.users.items():
+            if user_id != exclude_user and user_info["status"] == "online":
+                online_users.append({
+                    "id": user_id,
+                    "status": user_info["status"]
+                })
+        return online_users
 
-
-# 全局连接管理器
 manager = ConnectionManager()
 
 
-# WebSocket 连接端点
+# WebSocket 连接
 @app.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):
     await manager.connect_user(user_id, websocket)
@@ -253,7 +247,8 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
 
             elif message["type"] == "answer":
                 if "call_id" in message:
-                    await manager.answer_call(
+                    await
+                    manager.answer_call(
                         message["call_id"],
                         True,
                         message["answer"]
@@ -271,45 +266,47 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
         await manager.disconnect_user(user_id)
     except Exception as e:
         logger.error(f"WebSocket 错误: {e}")
-        await manager.disconnect_user(user_id)
+        await
+        manager.disconnect_user(user_id)
 
 
-# HTTP API 路由
+# HTTP API 端点
 @app.post("/api/join-room")
 async def join_room(request: JoinRoomRequest):
-    result = await manager.join_room(
+    """加入房间 API"""
+    result = await
+    manager.join_room(
         request.userId,
         request.roomId,
-        request.offer.model_dump()
+        request.offer.dict()
     )
     return result
-
 
 @app.post("/api/call-user")
 async def call_user(request: CallUserRequest):
-    result = await manager.call_user(
+    """呼叫用户 API"""
+    result = await
+    manager.call_user(
         request.from_user,
         request.to,
-        request.offer.model_dump()
+        request.offer.dict()
     )
     return result
 
-
 @app.post("/api/answer-call")
 async def answer_call(request: AnswerRequest):
-    #Lai: 修改 2：确保字段存在于模型中
-    call_id = request.call_id
-    accept = request.accept
-    answer = request.answer.model_dump() if request.answer else None
+    """应答呼叫 API"""
+    call_id = request.dict().get("call_id")
+    accept = request.dict().get("accept", True)
+    answer = request.answer.dict() if request.answer else None
+
     result = await manager.answer_call(call_id, accept, answer)
     return result
-
 
 @app.get("/api/online-users/{user_id}")
 async def get_online_users(user_id: str):
     users = manager.get_online_users(exclude_user=user_id)
     return {"users": users}
-
 
 @app.get("/api/user-status/{user_id}")
 async def get_user_status(user_id: str):
@@ -317,7 +314,6 @@ async def get_user_status(user_id: str):
         return {"status": manager.users[user_id]["status"]}
     else:
         return {"status": "offline"}
-
 
 if __name__ == "__main__":
     import uvicorn
