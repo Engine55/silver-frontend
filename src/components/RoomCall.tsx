@@ -3,7 +3,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  Video, Phone, PhoneOff, Copy, CheckCircle, Users,
+  Phone, PhoneOff, Copy, CheckCircle, Users,
   Wifi, WifiOff, Settings, Music, Heart, Zap
 } from 'lucide-react';
 import { RoomTheme } from '@/types/room';
@@ -13,7 +13,7 @@ type ConnectionStatus = '未连接' | '正在连接WebSocket...' | '等待其他
 
 interface AnyWebSocketMessage {
   type: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface RoomCallProps {
@@ -174,6 +174,72 @@ export default function RoomCall({ roomTheme }: RoomCallProps) {
     }
   }, [isClient]);
 
+// 处理 WebSocket 消息 - 移到{连接 WebSocket}功能之上
+  const handleWebSocketMessage = useCallback(async (message: AnyWebSocketMessage) => {
+    switch (message.type) {
+      case 'room-joined':
+        if (message.success) {
+          console.log('✅ 成功加入房间:', message.room_id);
+          if (message.is_room_full) {
+            setConnectionStatus('正在建立连接...');
+            setIsWaiting(true);
+            if (peerConnectionRef.current) {
+              try {
+                const offer = await peerConnectionRef.current.createOffer();
+                await peerConnectionRef.current.setLocalDescription(offer);
+                websocketRef.current?.send(JSON.stringify({
+                  type: 'offer',
+                  offer: offer
+                }));
+              } catch (error) {
+                console.error('❌ 创建 offer 失败:', error);
+                setConnectionStatus('连接失败');
+              }
+            }
+          } else {
+            setConnectionStatus('等待其他用户加入...');
+            setIsWaiting(true);
+          }
+        }
+        break;
+      case 'offer': {
+        if (peerConnectionRef.current && 'offer' in message) {
+          // message.offer 由 unknown → RTCSessionDescriptionInit
+          const offer = message.offer as RTCSessionDescriptionInit;
+          await peerConnectionRef.current.setRemoteDescription(offer);
+
+          const answer = await peerConnectionRef.current.createAnswer();
+          await peerConnectionRef.current.setLocalDescription(answer);
+          websocketRef.current?.send(JSON.stringify({ type: 'answer', answer }));
+        }
+        break;
+      }
+      case 'answer': {
+        if (peerConnectionRef.current && 'answer' in message) {
+          const answer = message.answer as RTCSessionDescriptionInit;
+          await peerConnectionRef.current.setRemoteDescription(answer);
+        }
+        break;
+      }
+      case 'ice-candidate': {
+        if (peerConnectionRef.current && 'candidate' in message) {
+          const candidateInit = message.candidate as RTCIceCandidateInit;
+          const candidate = new RTCIceCandidate(candidateInit);
+          await peerConnectionRef.current.addIceCandidate(candidate);
+        }
+        break;
+      }
+      case 'user-left':
+        setConnectionStatus('用户已离开');
+        setIsInCall(false);
+        setIsWaiting(false);
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = null;
+        }
+        break;
+    }
+  }, []);
+
   // 连接 WebSocket
   const connectWebSocket = useCallback(async (userId: string): Promise<WebSocket> => {
     return new Promise((resolve, reject) => {
@@ -221,80 +287,8 @@ export default function RoomCall({ roomTheme }: RoomCallProps) {
         reject(error);
       };
     });
-  }, []);
+  }, [handleWebSocketMessage]);
 
-  // 处理 WebSocket 消息
-  const handleWebSocketMessage = useCallback(async (message: AnyWebSocketMessage) => {
-    switch (message.type) {
-      case 'room-joined':
-        if (message.success) {
-          console.log('✅ 成功加入房间:', message.room_id);
-          if (message.is_room_full) {
-            setConnectionStatus('正在建立连接...');
-            setIsWaiting(true);
-            if (peerConnectionRef.current) {
-              try {
-                const offer = await peerConnectionRef.current.createOffer();
-                await peerConnectionRef.current.setLocalDescription(offer);
-                websocketRef.current?.send(JSON.stringify({
-                  type: 'offer',
-                  offer: offer
-                }));
-              } catch (error) {
-                console.error('❌ 创建 offer 失败:', error);
-                setConnectionStatus('连接失败');
-              }
-            }
-          } else {
-            setConnectionStatus('等待其他用户加入...');
-            setIsWaiting(true);
-          }
-        }
-        break;
-      case 'offer':
-        if (peerConnectionRef.current) {
-          try {
-            await peerConnectionRef.current.setRemoteDescription(message.offer);
-            const answer = await peerConnectionRef.current.createAnswer();
-            await peerConnectionRef.current.setLocalDescription(answer);
-            websocketRef.current?.send(JSON.stringify({
-              type: 'answer',
-              answer: answer
-            }));
-          } catch (error) {
-            console.error('❌ 处理 offer 失败:', error);
-          }
-        }
-        break;
-      case 'answer':
-        if (peerConnectionRef.current) {
-          try {
-            await peerConnectionRef.current.setRemoteDescription(message.answer);
-          } catch (error) {
-            console.error('❌ 处理 answer 失败:', error);
-          }
-        }
-        break;
-      case 'ice-candidate':
-        if (peerConnectionRef.current) {
-          try {
-            const candidate = new RTCIceCandidate(message.candidate);
-            await peerConnectionRef.current.addIceCandidate(candidate);
-          } catch (error) {
-            console.error('❌ 添加 ICE candidate 失败:', error);
-          }
-        }
-        break;
-      case 'user-left':
-        setConnectionStatus('用户已离开');
-        setIsInCall(false);
-        setIsWaiting(false);
-        if (remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = null;
-        }
-        break;
-    }
-  }, []);
 
   // 开始视频通话
   const startVideoCall = useCallback(async () => {
@@ -333,6 +327,7 @@ export default function RoomCall({ roomTheme }: RoomCallProps) {
       console.error('❌ 开始视频通话失败:', error);
       endVideoCall();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomTheme.videoRoomId, userId, getLocalStream, initializePeerConnection, connectWebSocket, isWaiting, isInCall, isWebSocketConnected]);
 
   // 结束视频通话
@@ -369,7 +364,7 @@ export default function RoomCall({ roomTheme }: RoomCallProps) {
     setIsWaiting(false);
     setIsWebSocketConnected(false);
     setConnectionStatus('未连接');
-  }, []);
+  }, [setIsInCall, setIsWaiting, setIsWebSocketConnected, setConnectionStatus]);
 
   // 复制房间号
   const copyRoomId = useCallback(async () => {
