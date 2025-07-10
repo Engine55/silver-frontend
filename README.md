@@ -1,6 +1,10 @@
-# Silver Game
-
-A real-time multimodal emotion analysis platform designed for elderly users, featuring intelligent social interaction, AI emotion detection, and empathetic virtual companions.
+<div align="center">
+  <img src="./assets/SilverGameLogo.png" alt="Silver Game Logo" width="200"/>
+  
+  # Silver Game
+  
+  *A real-time multimodal emotion analysis platform designed for elderly users, featuring intelligent social interaction, AI emotion detection, and empathetic virtual companions.*
+</div>
 
 ## 🎯 Inspiration
 
@@ -286,13 +290,6 @@ npm run build        # Build production version
 - Use TypeScript for type safety
 - Follow Next.js 15 App Router conventions
 
-## 🤝 Contributing
-
-We welcome contributions! Please feel free to submit issues and pull requests.
-
-## 📄 License
-
-This project is open source and available under the [MIT License](LICENSE).
 
 ---
 
